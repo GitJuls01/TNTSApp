@@ -27,12 +27,8 @@ class ActivityDetailFragment : Fragment() {
         // Inflate the layout for this fragment
         val view = inflater.inflate(R.layout.fragment_activity_detail, container, false)
 
-        view.findViewById<TextView>(R.id.firstLevel).setOnClickListener {
-            val newFragment = Home()
-            (activity as MainActivity).replaceFragment(newFragment)
-        }
-
-        view.findViewById<TextView>(R.id.secondLevel).setOnClickListener {
+        val btnBack: View = view.findViewById(R.id.btnBack)
+        btnBack.setOnClickListener {
             val code = arguments?.getString("code") ?: "N/A"
             val subjectName = arguments?.getString("subjectName") ?: "N/A"
             val newFragment = SubjectDetailFragment()

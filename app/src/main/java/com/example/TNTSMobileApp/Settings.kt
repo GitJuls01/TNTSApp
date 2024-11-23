@@ -21,7 +21,14 @@ class Settings : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_settings, container, false)
+        val view = inflater.inflate(R.layout.fragment_settings, container, false)
+        val cardView: View = view.findViewById(R.id.cardView)
+
+        cardView.setOnClickListener {
+            showAboutThisAppDialog()
+        }
+
+        return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -70,5 +77,13 @@ class Settings : Fragment() {
         }
     }
 
+    private fun showAboutThisAppDialog() {
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(R.layout.dialog_about_this_app)
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        // Show the dialog
+        dialog.show()
+    }
 
 }

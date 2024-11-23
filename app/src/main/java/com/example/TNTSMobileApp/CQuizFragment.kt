@@ -5,12 +5,12 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import com.google.firebase.auth.FirebaseAuth
 import android.widget.ImageView
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.bumptech.glide.Glide
+import com.google.firebase.auth.FirebaseAuth
 
-class Challenges : Fragment() {
+class CQuizFragment : Fragment() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var circleButton: ConstraintLayout
@@ -21,25 +21,14 @@ class Challenges : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        val view = inflater.inflate(R.layout.fragment_challenges, container, false)
+        val view = inflater.inflate(R.layout.fragment_c_quiz, container, false)
+        val btnBack: View = view.findViewById(R.id.btnBack)
 
-        val firstCardView: View = view.findViewById(R.id.firstCardView)
-
-        firstCardView.setOnClickListener {
-            // Use the replaceFragment method from MainActivity to navigate
-            val newFragment = C4Pics1WordFragment() // Replace with your target fragment
+        btnBack.setOnClickListener {
+            val newFragment = Challenges() // Replace with your target fragment
             (activity as MainActivity).replaceFragment(newFragment) // Call replaceFragment from MainActivity
         }
-
-        val secondCardView: View = view.findViewById(R.id.secondCardView)
-
-        secondCardView.setOnClickListener {
-            // Use the replaceFragment method from MainActivity to navigate
-            val newFragment = CQuizFragment() // Replace with your target fragment
-            (activity as MainActivity).replaceFragment(newFragment) // Call replaceFragment from MainActivity
-        }
-
-        return  view
+        return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {

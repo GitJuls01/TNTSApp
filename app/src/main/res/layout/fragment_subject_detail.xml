@@ -64,42 +64,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Path navigation (Breadcrumbs) -->
-    <LinearLayout
-        android:id="@+id/pathNavigation"
+    <ImageButton
+        android:id="@+id/btnBack"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="45dp"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="@id/guideline_vertical">
-
-        <TextView
-            android:id="@+id/firstLevel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Home"
-            android:textColor="@android:color/black"
-            android:textSize="12sp"
-            android:clickable="true"
-            android:focusable="true"/>
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text=" | "
-            android:textColor="@android:color/black"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/secondLevel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Class"
-            android:textColor="@android:color/black"
-            android:textSize="12sp"
-            android:clickable="true"
-            android:focusable="true" />
-    </LinearLayout>
+        android:src="@drawable/baseline_arrow_back_24"
+        android:background="@color/fui_transparent"
+        android:layout_marginTop="40dp"
+        app:layout_constraintStart_toStartOf="@id/guideline_vertical"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/classSubjectNameText"

@@ -10,16 +10,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.PopupWindow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.bumptech.glide.Glide
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -48,7 +45,8 @@ class SubjectDetailFragment : Fragment() {
             createActivity()
         }
 
-        view.findViewById<TextView>(R.id.firstLevel).setOnClickListener {
+        val btnBack: View = view.findViewById(R.id.btnBack)
+        btnBack.setOnClickListener {
             val newFragment = Home()
             (activity as MainActivity).replaceFragment(newFragment)
         }
@@ -195,8 +193,6 @@ class SubjectDetailFragment : Fragment() {
         return cardView
     }
 
-
-
     private fun checkIfUserIsCreator() {
         val currentUser = auth.currentUser?.uid ?: return
 
@@ -255,8 +251,8 @@ class SubjectDetailFragment : Fragment() {
 
     private fun createActivity() {
         // Inflate the Create Activity dialog layout
-        val dialogView =
-            LayoutInflater.from(requireContext()).inflate(R.layout.dialog_create_activity, null)
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_create_activity, null)
+        val btnUploadFile: Button = dialogView.findViewById(R.id.btnUploadFile)
 
         // Create the "Create Activity" dialog
         val createClassDialog = AlertDialog.Builder(requireContext())
@@ -265,19 +261,15 @@ class SubjectDetailFragment : Fragment() {
 
         createClassDialog.window?.setBackgroundDrawableResource(android.R.color.transparent) // Set transparent background
 
-        // Calculate the width of the dialog
-        val displayMetrics = requireContext().resources.displayMetrics
-        val width = (displayMetrics.widthPixels * 0.85).toInt()
-
-        createClassDialog.setOnShowListener {
-            val dialogWindow = createClassDialog.window
-            dialogWindow?.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+        btnUploadFile.setOnClickListener {
+            // Handle file upload logic here
+            Toast.makeText(requireContext(), "File upload not implemented", Toast.LENGTH_SHORT).show()
         }
 
         //Handle the submit button click inside the "Create Class" dialog
-        dialogView.findViewById<Button>(R.id.btnSubmitActivity).setOnClickListener {
+        dialogView.findViewById<Button>(R.id.btnSubmitCreatedActivity).setOnClickListener {
             val activityName = dialogView.findViewById<EditText>(R.id.etActivityName).text.toString()
-            val activityDesc = dialogView.findViewById<EditText>(R.id.etActivityDesc).text.toString()
+            val activityDesc = dialogView.findViewById<EditText>(R.id.etDescription).text.toString()
             val code = arguments?.getString("code") ?: "N/A"
 
             // Validate inputs
@@ -322,7 +314,7 @@ class SubjectDetailFragment : Fragment() {
 
                             // Clear input fields
                             dialogView.findViewById<EditText>(R.id.etActivityName).text.clear()
-                            dialogView.findViewById<EditText>(R.id.etActivityDesc).text.clear()
+                            dialogView.findViewById<EditText>(R.id.etDescription).text.clear()
                         }
                         .addOnFailureListener { e ->
                             Toast.makeText(requireContext(), "Failed to save activity: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -337,4 +329,5 @@ class SubjectDetailFragment : Fragment() {
         // Show the "Create Activity" dialog
         createClassDialog.show()
     }
+
 }
