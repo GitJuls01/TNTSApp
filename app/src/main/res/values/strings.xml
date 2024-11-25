@@ -37,6 +37,9 @@
     <string name="upload_a_file_optional">Upload a file (optional)</string>
     <string name="choose_file">Choose File</string>
     <string name="create">Create</string>
+    <string name="no_file_selected">No file selected</string>
+    <string name="delete_activity">Delete Activity</string>
+    <string name="edit_activity">Edit Activity</string>
 
 
 </resources>

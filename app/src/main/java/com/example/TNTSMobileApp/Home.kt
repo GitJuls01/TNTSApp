@@ -218,9 +218,6 @@ class Home : Fragment() {
         }
 
         button.setOnClickListener {
-            val bundle = Bundle().apply {
-                putString("code", code)
-            }
             showBottomSheetMoreDialog(code)
         }
         return cardView
