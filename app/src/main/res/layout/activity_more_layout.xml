@@ -8,24 +8,16 @@
 
     <Button
         android:id="@+id/btnEditAct"
-        style="@style/Widget.MaterialComponents.Button.Icon"
-        app:icon="@drawable/baseline_edit_24"
-        app:iconTint="@color/black"
-        android:layout_width="190dp"
-        android:layout_height="50dp"
-        android:layout_gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:backgroundTint="#D9D9D9"
         android:textColor="@android:color/black"
         android:text="@string/edit_activity" />
 
     <Button
         android:id="@+id/btnDeleteAct"
-        style="@style/Widget.MaterialComponents.Button.Icon"
-        app:icon="@drawable/baseline_delete_24"
-        app:iconTint="@color/red"
-        android:layout_width="190dp"
-        android:layout_height="50dp"
-        android:layout_gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:backgroundTint="#D9D9D9"
         android:textColor="@android:color/black"
         android:text="@string/delete_activity" />

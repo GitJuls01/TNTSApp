@@ -15,6 +15,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,7 +41,8 @@ class SubjectDetailFragment : Fragment() {
     private lateinit var fabActivity: FloatingActionButton
     private var fileUri: Uri? = null
     private lateinit var fileNameTextView: TextView
-    private var activityIdCounter = 1
+    private lateinit var progressBar: ProgressBar
+
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -48,6 +50,7 @@ class SubjectDetailFragment : Fragment() {
     ): View? {
         // Inflate the layout for this fragment
         val view = inflater.inflate(R.layout.fragment_subject_detail, container, false)
+        progressBar = view.findViewById(R.id.progressBar)
 
         fabActivity = view.findViewById(R.id.fabActivity)
         fabActivity.setOnClickListener {
@@ -73,21 +76,31 @@ class SubjectDetailFragment : Fragment() {
         firestore = FirebaseFirestore.getInstance()
         cardContainer = view.findViewById(R.id.cardContainer)
 
+
         // Retrieve data from arguments and set to TextView
         subjectNameTextView.text = arguments?.getString("subjectName") ?: "N/A"
 
         displayUserProfile()
         checkIfUserIsCreator()
         fetchData()
+        showLoading()
+    }
+
+    private fun showLoading() {
+        progressBar.visibility = View.VISIBLE
+    }
+
+    private fun hideLoading() {
+        progressBar.visibility = View.GONE
     }
 
     private fun fetchData() {
+
         val classCode = arguments?.getString("code") ?: "N/A"
         val currentUser = auth.currentUser?.uid ?: return
 
         // Clear the container before fetching new data
         cardContainer.removeAllViews()
-
         firestore.collection("Classes")
             .whereEqualTo("code", classCode)
             .get()
@@ -111,6 +124,7 @@ class SubjectDetailFragment : Fragment() {
                                 "No activities found. Ask your teacher"
                             }
                             Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+                            hideLoading() // Hide loading after handling empty activities
                             return@addOnSuccessListener
                         }
 
@@ -122,16 +136,13 @@ class SubjectDetailFragment : Fragment() {
                             val cardView = createCardView(activityName, teacherName, activityDesc, activityId)
                             cardContainer.addView(cardView)
                         }
+                        hideLoading() // Hide loading after successfully adding activities
                     }
-                    .addOnFailureListener { exception -> Toast.makeText(requireContext(), "Failed to load activities: ${exception.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
+                    .addOnFailureListener { exception -> Toast.makeText(requireContext(), "Failed to load activities: ${exception.message}", Toast.LENGTH_SHORT).show() }
+                hideLoading()
             }
-            .addOnFailureListener { exception -> Toast.makeText(requireContext(), "Failed to load class data: ${exception.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+            .addOnFailureListener { exception -> Toast.makeText(requireContext(), "Failed to load class data: ${exception.message}", Toast.LENGTH_SHORT).show() }
+        hideLoading()
     }
 
     private fun createCardView(activityName: String, teacherName: String, activityDesc: String, activityId: String): CardView {
@@ -261,49 +272,128 @@ class SubjectDetailFragment : Fragment() {
 
         bottomSheetMoreDialog.setContentView(bottomSheetMoreView)
 
-        bottomSheetMoreView.findViewById<Button>(R.id.btnDeleteAct).setOnClickListener {
-            // Reference the Firestore instance
-            val activitiesCollection = firestore.collection("Activities")
+        bottomSheetMoreView.findViewById<Button>(R.id.btnEditAct).setOnClickListener {
+            val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_create_activity, null)
+            val btnUploadFile: Button = dialogView.findViewById(R.id.btnUploadFile)
+
+            btnUploadFile.setOnClickListener {
+                filePickerLauncher.launch("*/*") // Show all files initially, filter during selection
+            }
+            // Create the "Create Activity" dialog
+            val editActivityDialog = AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .create()
+
+            editActivityDialog.window?.setBackgroundDrawableResource(android.R.color.transparent) // Set transparent background
+
+            val editActivitiesCollection = firestore.collection("Activities")
 
             // Query for the document with the matching code and activityId
-            activitiesCollection.whereEqualTo("code", code).get()
+            editActivitiesCollection
+                .whereEqualTo("code", code)
+                .whereEqualTo("activityId", activityId) // Compound query for better performance
+                .limit(1) // Fetch only one matching document
+                .get()
                 .addOnSuccessListener { documents ->
-                    var activityDeleted = false
-                    for (document in documents) {
-                        val fetchedActivityId = document.getString("activityId") ?: ""
-                        if (fetchedActivityId == activityId) {
-                            // Delete the document
-                            activitiesCollection.document(document.id).delete()
+                    if (!documents.isEmpty) {
+                        val document = documents.first()
+                        val documentId = document.id // Save the document ID for updating
+
+                        val activityName = document.getString("activityName") ?: ""
+                        val activityDesc = document.getString("activityDesc") ?: ""
+                        val fileName = document.getString("fileName") ?: "No File Selected"
+
+                        // Set the values in the EditTexts
+                        val etActivityName = dialogView.findViewById<EditText>(R.id.etActivityName)
+                        val etDescription = dialogView.findViewById<EditText>(R.id.etDescription)
+                        fileNameTextView = dialogView.findViewById(R.id.tvFileName)
+
+                        etActivityName.setText(activityName)
+                        etDescription.setText(activityDesc)
+                        fileNameTextView.text = fileName
+
+                        dialogView.findViewById<Button>(R.id.btnSubmitCreatedActivity).setOnClickListener {
+                            showLoading()
+                            // Retrieve updated values
+                            val updatedActivityName = etActivityName.text.toString()
+                            val updatedActivityDesc = etDescription.text.toString()
+                            val updatedFileName = fileNameTextView.text.toString()
+
+
+                            // Update Firestorm document
+                            editActivitiesCollection.document(documentId)
+                                .update(
+                                    mapOf(
+                                        "activityName" to updatedActivityName,
+                                        "activityDesc" to updatedActivityDesc,
+                                        "fileName" to updatedFileName,
+                                        "fileUri" to fileUri.toString(),
+                                    )
+                                )
                                 .addOnSuccessListener {
-                                    Toast.makeText(requireContext(), "Activity deleted successfully. $activityId", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(requireContext(), "Activity Updated Successfully", Toast.LENGTH_SHORT).show()
                                     fetchData()
-                                    bottomSheetMoreDialog.dismiss() // Dismiss the dialog after successful deletion
+
+                                    editActivityDialog.dismiss() // Close the dialog
                                 }
-                                .addOnFailureListener { e ->
-                                    Toast.makeText(requireContext(), "Failed to delete activity: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                            activityDeleted = true
-                            break
                         }
-                    }
-                    if (!activityDeleted) {
-                        Toast.makeText(
-                            requireContext(),
-                            "No matching activity found with the given code and ID.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+
+                    } else {
+                        Toast.makeText(requireContext(), "Activity not found.", Toast.LENGTH_SHORT).show()
                     }
                 }
-                .addOnFailureListener { e ->
-                    Toast.makeText(
-                        requireContext(),
-                        "Error: ${e.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                bottomSheetMoreDialog.dismiss()
+            editActivityDialog.show()
+
         }
 
-        bottomSheetMoreDialog.show() // Show the dialog
+        bottomSheetMoreView.findViewById<Button>(R.id.btnDeleteAct).setOnClickListener {
+            // Show confirmation dialog
+            AlertDialog.Builder(requireContext())
+                .setTitle("Delete Activity")
+                .setMessage("Are you sure you want to delete this activity?")
+                .setPositiveButton("Yes") { dialog, _ ->
+                    showLoading()
+                    val activitiesCollection = firestore.collection("Activities")
+
+                    // Query for the document with the matching code and activityId
+                    activitiesCollection.whereEqualTo("code", code).get()
+                        .addOnSuccessListener { documents ->
+                            var activityDeleted = false
+                            for (document in documents) {
+                                val fetchedActivityId = document.getString("activityId") ?: ""
+                                if (fetchedActivityId == activityId) {
+                                    // Delete the document
+                                    activitiesCollection.document(document.id).delete()
+                                        .addOnSuccessListener {
+                                            Toast.makeText(requireContext(), "Activity Deleted Successfully", Toast.LENGTH_SHORT).show()
+                                            fetchData()
+                                            bottomSheetMoreDialog.dismiss() // Dismiss the bottom sheet dialog after successful deletion
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Toast.makeText(requireContext(), "Failed to delete activity: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    activityDeleted = true
+                                    break
+                                }
+                            }
+                            if (!activityDeleted) { Toast.makeText(requireContext(), "No matching activity found with the given code and ID.", Toast.LENGTH_SHORT).show() }
+                        }
+                        .addOnFailureListener { e -> Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show() }
+
+                    dialog.dismiss() // Close the confirmation dialog
+                }
+                .setNegativeButton("No") { dialog, _ ->
+                    dialog.dismiss() // Close the confirmation dialog without deleting
+                }
+                .create()
+                .show()
+
+            bottomSheetMoreDialog.dismiss()
+        }
+
+        bottomSheetMoreDialog.show()
+
     }
 
     private fun checkIfUserIsCreator() {
@@ -384,68 +474,87 @@ class SubjectDetailFragment : Fragment() {
             val activityName = dialogView.findViewById<EditText>(R.id.etActivityName).text.toString()
             val activityDesc = dialogView.findViewById<EditText>(R.id.etDescription).text.toString()
             val code = arguments?.getString("code") ?: "N/A"
-            val activityId = activityIdCounter++.toString()
 
             // Validate inputs
-            if (activityName.isEmpty() || activityDesc.isBlank()) {
+            if (activityName.isBlank()) {
+                Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }else if (activityDesc.isBlank()) {
                 Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // Fetch the createdByUserName based on the class code
-            firestore.collection("Classes")
+            // Fetch the max activityId for the given code
+            firestore.collection("Activities")
                 .whereEqualTo("code", code)
+                .orderBy("activityId", Query.Direction.DESCENDING)
+                .limit(1)
                 .get()
-                .addOnSuccessListener { classDocuments ->
-                    if (classDocuments.isEmpty) {
-                        Toast.makeText(requireContext(), "Class not found for the provided code", Toast.LENGTH_SHORT).show()
-                        return@addOnSuccessListener
+                .addOnSuccessListener { activityDocuments ->
+                    // Determine the next activityId
+                    val nextActivityId = if (activityDocuments.isEmpty) 1 else {
+                        val maxActivityId = activityDocuments.documents.first().getString("activityId")?.toIntOrNull() ?: 0
+                        maxActivityId + 1
                     }
+                    showLoading()
+                    firestore.collection("Classes")
+                        .whereEqualTo("code", code)
+                        .get()
+                        .addOnSuccessListener { classDocuments ->
+                            if (classDocuments.isEmpty) {
+                                Toast.makeText(requireContext(), "Class not found for the provided code", Toast.LENGTH_SHORT).show()
+                                return@addOnSuccessListener
+                            }
 
-                    // Retrieve createdByUserName from the class document
-                    val classDocument = classDocuments.first()
-                    val createdByUserName = classDocument.getString("createdByUserName") ?: "Unknown"
+                            // Retrieve createdByUserName from the class document
+                            val classDocument = classDocuments.first()
+                            val createdByUserName = classDocument.getString("createdByUserName") ?: "Unknown"
 
+                            // Prepare activity information
+                            val activityInfo = hashMapOf(
+                                "activityId" to nextActivityId.toString(),
+                                "activityName" to activityName,
+                                "activityDesc" to activityDesc,
+                                "createdByUserId" to auth.currentUser?.uid,
+                                "createdByUserName" to auth.currentUser?.displayName,
+                                "code" to code,
+                                "createdDate" to Timestamp.now(),
+                                "fileUri" to fileUri.toString(),
+                                "fileName" to fileUri?.let { it1 -> getFileNameFromUri(it1) }
+                            )
 
-                    // Prepare activity information
-                    val activityInfo = hashMapOf(
-                        "activityId" to activityId,
-                        "activityName" to activityName,
-                        "activityDesc" to activityDesc,
-                        "createdByUserId" to auth.currentUser?.uid,
-                        "createdByUserName" to auth.currentUser?.displayName,
-                        "code" to code,
-                        "createdDate"  to Timestamp.now(),
-                        "fileUri" to  fileUri.toString(),
-                        "fileName" to fileUri?.let { it1 -> getFileNameFromUri(it1) }
-                    )
+                            // Add activity to Firestore
+                            firestore.collection("Activities").add(activityInfo)
+                                .addOnSuccessListener {
+                                    // After saving, create a new CardView with activityName and createdByUserName
+                                    val newCardView = createCardView(activityName, createdByUserName, activityDesc, nextActivityId.toString())
+                                    cardContainer.addView(newCardView, 0)
 
-                    // Add activity to Firestore
-                    firestore.collection("Activities").add(activityInfo)
-                        .addOnSuccessListener {
-                            // After saving, create a new CardView with activityName and createdByUserName
-                            val newCardView = createCardView(activityName, createdByUserName, activityDesc, activityId)
-                            cardContainer.addView(newCardView, 0)
-
-                            Toast.makeText(requireContext(), "Activity Created Successfully", Toast.LENGTH_SHORT).show()
-
-                            // Clear input fields
-                            dialogView.findViewById<EditText>(R.id.etActivityName).text.clear()
-                            dialogView.findViewById<EditText>(R.id.etDescription).text.clear()
-                            fileUri = null
+                                    Toast.makeText(requireContext(), "Activity Created Successfully", Toast.LENGTH_SHORT).show()
+                                    hideLoading()
+                                    // Clear input fields
+                                    dialogView.findViewById<EditText>(R.id.etActivityName).text.clear()
+                                    dialogView.findViewById<EditText>(R.id.etDescription).text.clear()
+                                    fileUri = null
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(requireContext(), "Failed to save activity: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
                         }
                         .addOnFailureListener { e ->
-                            Toast.makeText(requireContext(), "Failed to save activity: ${e.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(requireContext(), "Failed to load class data: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                 }
                 .addOnFailureListener { e ->
-                    Toast.makeText(requireContext(), "Failed to load class data: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Failed to fetch max activity ID: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
 
             createClassDialog.dismiss()
         }
-        // Show the "Create Activity" dialog
+
+// Show the "Create Activity" dialog
         createClassDialog.show()
+
     }
 
     private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -468,6 +577,7 @@ class SubjectDetailFragment : Fragment() {
                 }
             }
         }
+
     private fun isAcceptedFileType(mimeType: String?): Boolean {
         // Check if the MIME type matches PDF or Word document formats
         return mimeType == "application/pdf" ||
@@ -499,12 +609,5 @@ class SubjectDetailFragment : Fragment() {
             Toast.makeText(requireContext(), "No app available to open this file", Toast.LENGTH_SHORT).show()
         }
     }
-
-
-
-
-
-
-
 
 }

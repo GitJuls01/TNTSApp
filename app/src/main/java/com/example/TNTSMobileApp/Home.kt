@@ -17,6 +17,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.cardview.widget.CardView
@@ -40,6 +41,7 @@ class Home : Fragment() {
     private lateinit var profilePicture: ImageView
     private lateinit var firestore: FirebaseFirestore // Initialize Firestore
     private lateinit var cardContainer: LinearLayout
+    private lateinit var progressBar: ProgressBar
 
 
     override fun onCreateView(
@@ -59,10 +61,15 @@ class Home : Fragment() {
         circleButton = view.findViewById(R.id.circleButton)
         profilePicture = view.findViewById(R.id.profilePicture)
         cardContainer = view.findViewById(R.id.cardContainer) // Initialize cardContainer
+        // Find the ProgressBar
+        progressBar = view.findViewById(R.id.progressBar)
+
 
 
         // Find the FloatingActionButton from the inflated view
         val fab: View = view.findViewById(R.id.fab)
+
+        // Find the ProgressBar
 
         // Set an OnClickListener for the FloatingActionButton
         fab.setOnClickListener {
@@ -82,7 +89,16 @@ class Home : Fragment() {
         val joinedDate: Date
     )
 
+    private fun showLoading() {
+        progressBar.visibility = View.VISIBLE
+    }
+
+    private fun hideLoading() {
+        progressBar.visibility = View.GONE
+    }
+
     private fun fetchData() {
+        showLoading()
         val currentUser = auth.currentUser?.uid ?: return
 
         // Initial query to retrieve documents
@@ -120,13 +136,15 @@ class Home : Fragment() {
                     val cardView = createCardView(classInfo.subjectName, classInfo.section, classInfo.code)
                     cardContainer.addView(cardView)
                 }
+                // Hide the loading indicator after successful data fetch
+                hideLoading()
             }
             .addOnFailureListener { e ->
                 Log.e("FirestormError", "Error fetching documents: ", e)
                 Toast.makeText(requireContext(), "Error fetching classes: ${e.message}", Toast.LENGTH_SHORT).show()
+
             }
     }
-
 
     private fun createCardView(subjectName: String, section: String, code: String): CardView {
         val cardView = CardView(requireContext())
@@ -431,7 +449,6 @@ class Home : Fragment() {
         dialog.show()
     }
 
-
     private fun showBottomSheetDialog() {
         // Create and show the BottomSheetDialog
         val bottomSheetDialog = BottomSheetDialog(requireContext())
@@ -468,7 +485,10 @@ class Home : Fragment() {
                 val section = dialogView.findViewById<EditText>(R.id.etSection).text.toString()
 
                 // Validate inputs
-                if (subjectName.isEmpty() || section.isEmpty()) {
+                if (subjectName.isBlank() || section.isEmpty()) {
+                    Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }else if (section.isBlank()) {
                     Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
@@ -476,7 +496,7 @@ class Home : Fragment() {
                 // Generate a random code
                 val randomCode = generateRandomCode()
 
-                // Save the class information to Firestore
+                showLoading()
                 val classInfo = hashMapOf(
                     "subjectName" to subjectName,
                     "section" to section,
@@ -501,6 +521,7 @@ class Home : Fragment() {
                         cardContainer.addView(newCardView, 0)
 
                         Toast.makeText(requireContext(), "Class created Successfully", Toast.LENGTH_SHORT).show()
+                        hideLoading()
                         // Clear input fields
                         dialogView.findViewById<EditText>(R.id.etSubjectName).text.clear()
                         dialogView.findViewById<EditText>(R.id.etSection).text.clear()
@@ -594,6 +615,7 @@ class Home : Fragment() {
                                 }
                             }else {
                                 // If not a member, create a new member entry with userId and joinedDate
+                                showLoading()
                                 val newMember = mapOf(
                                     "userId" to currentUserId,
                                     "joinedDate" to joinedDate,
@@ -614,6 +636,7 @@ class Home : Fragment() {
                                         cardContainer.addView(newCardView, 0)
 
                                         Toast.makeText(requireContext(), "Joined Class Successfully", Toast.LENGTH_SHORT).show()
+                                        hideLoading()
                                     }
                                     .addOnFailureListener { e ->
                                         Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
