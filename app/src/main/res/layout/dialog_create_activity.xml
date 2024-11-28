@@ -11,6 +11,7 @@
         android:padding="16dp"
         android:background="@drawable/dialog_background">
 
+        <!-- Guideline for left margin -->
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideline_vertical"
             android:layout_width="wrap_content"
@@ -18,6 +19,7 @@
             android:orientation="vertical"
             app:layout_constraintGuide_percent="0.10" />
 
+        <!-- Guideline for right margin -->
         <androidx.constraintlayout.widget.Guideline
             android:id="@+id/guideline_vertical1"
             android:layout_width="wrap_content"
@@ -25,7 +27,7 @@
             android:orientation="vertical"
             app:layout_constraintGuide_percent="0.90" />
 
-        <!-- Dialog title -->
+        <!-- Dialog Title -->
         <TextView
             android:id="@+id/tvCreateClassTitle"
             android:layout_width="wrap_content"
@@ -39,7 +41,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Subject Name text -->
+        <!-- Subject Name Text -->
         <TextView
             android:id="@+id/tvActivityName"
             android:layout_width="wrap_content"
@@ -51,7 +53,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Subject Name input field -->
+        <!-- Subject Name Input -->
         <EditText
             android:id="@+id/etActivityName"
             android:layout_width="0dp"
@@ -67,7 +69,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Section text -->
+        <!-- Section Text -->
         <TextView
             android:id="@+id/tvDescription"
             android:layout_width="wrap_content"
@@ -79,7 +81,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Section input field -->
+        <!-- Section Input -->
         <EditText
             android:id="@+id/etDescription"
             android:layout_width="0dp"
@@ -88,16 +90,16 @@
             android:padding="12dp"
             android:textSize="14sp"
             android:layout_marginTop="2dp"
+            android:inputType="textMultiLine"
             android:elevation="5dp"
             android:gravity="start"
-            android:inputType="textMultiLine"
-            android:minHeight="100dp"
-            android:maxLines="5"
+            android:maxLines="10"
             android:scrollbars="vertical"
             app:layout_constraintTop_toBottomOf="@id/tvDescription"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Upload File Text -->
         <TextView
             android:id="@+id/tvUploadFile"
             android:layout_width="wrap_content"
@@ -109,6 +111,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/etDescription" />
 
+        <!-- Upload File Button -->
         <Button
             android:id="@+id/btnUploadFile"
             style="@style/Widget.MaterialComponents.Button.Icon"
@@ -123,20 +126,56 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- File Name Display -->
         <TextView
             android:id="@+id/tvFileName"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="@string/no_file_selected"
             android:gravity="center"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="5dp"
             android:textColor="@color/black"
             android:textSize="15sp"
             app:layout_constraintTop_toBottomOf="@id/btnUploadFile"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintStart_toStartOf="@id/guideline_vertical"
+            app:layout_constraintEnd_toEndOf="@id/guideline_vertical1" />
 
-        <!-- Submit button -->
+        <!-- Set Due Date Button -->
+        <Button
+            android:id="@+id/btnSetDueDate"
+            style="@style/Widget.MaterialComponents.Button.Icon"
+            app:icon="@drawable/baseline_calendar_month_24"
+            app:iconTint="@color/black"
+            android:layout_width="130dp"
+            android:layout_height="50dp"
+            android:text="Set Due Date"
+            android:textSize="9sp"
+            android:backgroundTint="@color/white"
+            android:textColor="#640000"
+            android:layout_marginTop="5dp"
+            app:layout_constraintTop_toBottomOf="@id/tvFileName"
+            app:layout_constraintStart_toStartOf="@id/guideline_vertical"
+            app:layout_constraintEnd_toStartOf="@id/SetPoints"
+            app:layout_constraintHorizontal_chainStyle="packed" />
+
+        <!-- Set Points Input -->
+        <EditText
+            android:id="@+id/SetPoints"
+            android:layout_width="100dp"
+            android:layout_height="38dp"
+            android:background="@drawable/rectangular_edit_text_background"
+            android:padding="12dp"
+            android:elevation="2dp"
+            android:textSize="11sp"
+            android:hint="@string/set_points"
+            android:layout_marginTop="11dp"
+            android:layout_marginStart="9dp"
+            android:gravity="center"
+            app:layout_constraintTop_toBottomOf="@id/tvFileName"
+            app:layout_constraintStart_toEndOf="@id/btnSetDueDate"
+            app:layout_constraintEnd_toEndOf="@id/guideline_vertical1" />
+
+        <!-- Submit Button -->
         <Button
             android:id="@+id/btnSubmitCreatedActivity"
             android:layout_width="0dp"
@@ -144,7 +183,7 @@
             android:text="@string/create"
             android:backgroundTint="@color/red"
             android:textColor="@color/white"
-            app:layout_constraintTop_toBottomOf="@id/tvFileName"
+            app:layout_constraintTop_toBottomOf="@id/btnSetDueDate"
             app:layout_constraintStart_toStartOf="@id/guideline_vertical"
             app:layout_constraintEnd_toEndOf="@id/guideline_vertical1"
             android:layout_marginTop="20dp" />

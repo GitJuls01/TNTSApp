@@ -1,6 +1,8 @@
 package com.example.TNTSMobileApp
 
 import android.app.AlertDialog
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
@@ -29,6 +31,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import java.util.Calendar
 
 class SubjectDetailFragment : Fragment() {
 
@@ -42,6 +45,7 @@ class SubjectDetailFragment : Fragment() {
     private var fileUri: Uri? = null
     private lateinit var fileNameTextView: TextView
     private lateinit var progressBar: ProgressBar
+    private lateinit var btnSetDueDate: Button
 
 
     override fun onCreateView(
@@ -286,8 +290,12 @@ class SubjectDetailFragment : Fragment() {
 
             editActivityDialog.window?.setBackgroundDrawableResource(android.R.color.transparent) // Set transparent background
 
-            val editActivitiesCollection = firestore.collection("Activities")
+            val tvEditClassTitle = dialogView.findViewById<TextView>(R.id.tvCreateClassTitle)
+            val submitButton = dialogView.findViewById<Button>(R.id.btnSubmitCreatedActivity)
+            tvEditClassTitle.text = "Edit Activity"
+            submitButton.text = "Save"
 
+            val editActivitiesCollection = firestore.collection("Activities")
             // Query for the document with the matching code and activityId
             editActivitiesCollection
                 .whereEqualTo("code", code)
@@ -312,13 +320,13 @@ class SubjectDetailFragment : Fragment() {
                         etDescription.setText(activityDesc)
                         fileNameTextView.text = fileName
 
-                        dialogView.findViewById<Button>(R.id.btnSubmitCreatedActivity).setOnClickListener {
+
+                        submitButton.setOnClickListener {
                             showLoading()
                             // Retrieve updated values
                             val updatedActivityName = etActivityName.text.toString()
                             val updatedActivityDesc = etDescription.text.toString()
                             val updatedFileName = fileNameTextView.text.toString()
-
 
                             // Update Firestorm document
                             editActivitiesCollection.document(documentId)
@@ -457,6 +465,7 @@ class SubjectDetailFragment : Fragment() {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_create_activity, null)
         val btnUploadFile: Button = dialogView.findViewById(R.id.btnUploadFile)
         fileNameTextView = dialogView.findViewById(R.id.tvFileName)
+        btnSetDueDate = dialogView.findViewById(R.id.btnSetDueDate)
 
         // Create the "Create Activity" dialog
         val createClassDialog = AlertDialog.Builder(requireContext())
@@ -468,6 +477,9 @@ class SubjectDetailFragment : Fragment() {
         // Launch the file picker when the button is clicked
         btnUploadFile.setOnClickListener {
             filePickerLauncher.launch("*/*") // Show all files initially, filter during selection
+        }
+        btnSetDueDate.setOnClickListener {
+            showDatePicker()
         }
         //Handle the submit button click inside the "Create Class" dialog
         dialogView.findViewById<Button>(R.id.btnSubmitCreatedActivity).setOnClickListener {
@@ -555,6 +567,40 @@ class SubjectDetailFragment : Fragment() {
 // Show the "Create Activity" dialog
         createClassDialog.show()
 
+    }
+
+    private fun showDatePicker() {
+        val calendar = Calendar.getInstance()
+        val year = calendar.get(Calendar.YEAR)
+        val month = calendar.get(Calendar.MONTH)
+        val day = calendar.get(Calendar.DAY_OF_MONTH)
+
+        val datePickerDialog = DatePickerDialog(
+            requireContext(),
+            { _, selectedYear, selectedMonth, selectedDay ->
+                // Correct the day and month usage
+                showTimePicker(selectedYear, selectedMonth, selectedDay)
+            },
+            year, month, day
+        )
+        datePickerDialog.show()
+    }
+
+    private fun showTimePicker(year: Int, month: Int, day: Int) {
+        val calendar = Calendar.getInstance()
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        val minute = calendar.get(Calendar.MINUTE)
+
+        val timePickerDialog = TimePickerDialog(
+            requireContext(),
+            { _, selectedHour, selectedMinute ->
+                // After selecting the time, display the selected date & time in the TextView
+                val dueDate = "${day}/${month + 1}/$year $selectedHour:$selectedMinute"
+                btnSetDueDate.text = dueDate // Update TextView with selected date & time
+            },
+            hour, minute, true // true for 24-hour format, false for 12-hour format
+        )
+        timePickerDialog.show()
     }
 
     private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->

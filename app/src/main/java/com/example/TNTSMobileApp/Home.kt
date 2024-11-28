@@ -405,14 +405,16 @@ class Home : Fragment() {
 
                             // Extract userId and userName from members
                             for (document in documents) {
-                                val members = document.get("members") as? List<Map<String, Any>>
-                                    ?: emptyList()
+                                val members = document.get("members") as? List<Map<String, Any>> ?: emptyList()
                                 members.forEach { member ->
-                                    val userName = member["userName"] as? String ?: "Unknown"
-                                    val profilePictureUrl = member["profilePictureUrl"] as? String ?: ""
-                                    membersList.add(
-                                        MembersAdapter.Member(userName, profilePictureUrl)
-                                    )
+                                    val leaveDate = member["leaveDate"] as? String
+                                    if (leaveDate == "") { // Filter members with an empty leaveDate
+                                        val userName = member["userName"] as? String ?: "Unknown"
+                                        val profilePictureUrl = member["profilePictureUrl"] as? String ?: ""
+                                        membersList.add(
+                                            MembersAdapter.Member(userName, profilePictureUrl)
+                                        )
+                                    }
                                 }
                             }
                             if (membersList.isEmpty()) {
@@ -428,7 +430,6 @@ class Home : Fragment() {
                         Toast.makeText(context, "Failed to fetch data: ${e.message}", Toast.LENGTH_SHORT).show()
                         bottomSheetMoreDialog.dismiss()
                     }
-
             }
 
         bottomSheetMoreDialog.show()
@@ -623,7 +624,7 @@ class Home : Fragment() {
                                     "leaveDate" to leaveDate,
                                     "profilePictureUrl" to profilePictureUrl
                                 )
-                                // Add the new member to the members array in Firestore
+                                // Add the new member to the members array in Firestorm
                                 document.reference.update("members", FieldValue.arrayUnion(newMember))
                                     .addOnSuccessListener {
                                         // Retrieve class details to display in a CardView
