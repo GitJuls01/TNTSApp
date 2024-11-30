@@ -17,8 +17,10 @@
     <string name="join_class">Join Class</string>
     <string name="upload_file">Upload File</string>
     <string name="play_video">Play Video</string>
-    <string name="class_code_label">Class Code: %1$s</string>
     <string name="teacher_name_label">Teacher: %1$s</string>
+    <string name="activity_name_label">New Task: %1$s</string>
+    <string name="created_date_label">Posted: %1$s</string>
+    <string name="due_date_label">Due: %1$s</string>
     <string name="class_code">Class Code</string>
     <string name="see_members">See Members</string>
     <string name="leave_class">Leave Class</string>

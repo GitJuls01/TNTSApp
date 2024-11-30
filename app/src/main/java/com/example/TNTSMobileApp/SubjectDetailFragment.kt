@@ -6,6 +6,7 @@ import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -31,7 +32,9 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 class SubjectDetailFragment : Fragment() {
 
@@ -46,6 +49,7 @@ class SubjectDetailFragment : Fragment() {
     private lateinit var fileNameTextView: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var btnSetDueDate: Button
+    private var dueDate: String ? = null
 
 
     override fun onCreateView(
@@ -134,10 +138,14 @@ class SubjectDetailFragment : Fragment() {
 
                         for (activityDocument in activityDocuments) {
                             val activityName = activityDocument.getString("activityName") ?: "N/A"
-                            val teacherName = activityDocument.getString("createdByUserName") ?: "N/A"
                             val activityDesc = activityDocument.getString("activityDesc") ?: "N/A"
                             val activityId = activityDocument.getString("activityId") ?: "N/A"
-                            val cardView = createCardView(activityName, teacherName, activityDesc, activityId)
+                            val createdDate = activityDocument.getTimestamp("createdDate")
+                            val formattedCreatedDate = formatCreatedDate(createdDate)
+                            val dueDate = activityDocument.getString("dueDate")
+                            val formattedDueDate = formatDueDate(dueDate)
+
+                            val cardView = createCardView(activityName, formattedCreatedDate, formattedDueDate, activityDesc, activityId)
                             cardContainer.addView(cardView)
                         }
                         hideLoading() // Hide loading after successfully adding activities
@@ -149,7 +157,74 @@ class SubjectDetailFragment : Fragment() {
         hideLoading()
     }
 
-    private fun createCardView(activityName: String, teacherName: String, activityDesc: String, activityId: String): CardView {
+    private fun formatDueDate(dueDate: String?): String {
+        return try {
+            val dateFormat = SimpleDateFormat("MM/dd/yyyy h:mm a", Locale.getDefault()) // Adjust format as needed
+            val date = dateFormat.parse(dueDate ?: return "No Due Date")
+            val now = Calendar.getInstance()
+            val dueDateCalendar = Calendar.getInstance().apply {
+                if (date != null) {
+                    time = date
+                }
+            }
+
+            val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault()) // 12-hour format with AM/PM
+
+            when {
+                // Check if the due date is today
+                now.get(Calendar.YEAR) == dueDateCalendar.get(Calendar.YEAR) &&
+                        now.get(Calendar.DAY_OF_YEAR) == dueDateCalendar.get(Calendar.DAY_OF_YEAR) -> {
+                    "Today, ${date?.let { timeFormat.format(it) }}"
+                }
+                // Check if the due date is tomorrow
+                now.get(Calendar.YEAR) == dueDateCalendar.get(Calendar.YEAR) &&
+                        now.get(Calendar.DAY_OF_YEAR) + 1 == dueDateCalendar.get(Calendar.DAY_OF_YEAR) -> {
+                    "Tomorrow, ${date?.let { timeFormat.format(it) }}"
+                }
+                // Show only the date for other days
+                else -> {
+                    val formattedDate = date?.let {
+                        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(
+                            it
+                        )
+                    }
+                    val formattedTime = date?.let { timeFormat.format(it) } // Format the time as per device settings
+                    "$formattedDate $formattedTime"
+                }
+
+            }
+        } catch (e: Exception) {
+            "Fallback if parsing fails" // Fallback if parsing fails
+        }
+    }
+
+    private fun formatCreatedDate(timestamp: Timestamp?): String {
+        return timestamp?.toDate()?.let { date ->
+            val now = Calendar.getInstance()
+            val postedTime = Calendar.getInstance().apply { time = date }
+
+            val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault()) // Use 12-hour format with AM/PM
+
+            when {
+                // Check if posted today
+                now.get(Calendar.YEAR) == postedTime.get(Calendar.YEAR) &&
+                        now.get(Calendar.DAY_OF_YEAR) == postedTime.get(Calendar.DAY_OF_YEAR) -> {
+                    timeFormat.format(date) // Show time only
+                }
+                // Check if posted yesterday
+                now.get(Calendar.YEAR) == postedTime.get(Calendar.YEAR) &&
+                        now.get(Calendar.DAY_OF_YEAR) - postedTime.get(Calendar.DAY_OF_YEAR) == 1 -> {
+                    "Yesterday, ${timeFormat.format(date)}" // Show "Yesterday, time"
+                }
+                // Show full date for older posts
+                else -> {
+                    SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(date) // Format as "MMM dd, yyyy"
+                }
+            }
+        } ?: "N/A"
+    }
+
+    private fun createCardView(activityName: String, createdDate: String, dueDate: String, activityDesc: String, activityId: String): CardView {
         val cardView = CardView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -190,23 +265,37 @@ class SubjectDetailFragment : Fragment() {
 
         // Activity Name TextView
         val activityNameTextView = TextView(requireContext()).apply {
-            text = activityName
+            text = getString(R.string.activity_name_label, activityName)
             textSize = 14f
             setTextColor(Color.BLACK)
+            setTypeface(null, Typeface.BOLD)
         }
 
         // Teacher Name TextView
-        val teacherNameTextView = TextView(requireContext()).apply {
-            text = getString(R.string.teacher_name_label, teacherName)  // Use string resource with placeholder teacherName
+        val createdDateTextView = TextView(requireContext()).apply {
+            text = getString(R.string.created_date_label, createdDate)  // Use string resource with placeholder teacherName
             textSize = 12f
             setTextColor(Color.DKGRAY)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 10 // Set the top margin in pixels (you can convert dp to pixels if needed)
+            }
         }
 
-        val activityDescTextView = TextView(requireContext()).apply {
-            text = activityDesc
+        val dueDateTextView = TextView(requireContext()).apply {
+            text = getString(R.string.due_date_label, dueDate)  // Use string resource with placeholder teacherName
             textSize = 12f
-            setTextColor(Color.BLACK)
+            setTextColor(Color.DKGRAY)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 10 // Set the top margin in pixels (you can convert dp to pixels if needed)
+            }
         }
+
 
         val button = Button(requireContext()).apply {
             setCompoundDrawablesWithIntrinsicBounds(R.drawable.baseline_more_vert_24, 0, 0, 0)
@@ -235,7 +324,8 @@ class SubjectDetailFragment : Fragment() {
             }
 
         textLayout.addView(activityNameTextView)
-        textLayout.addView(teacherNameTextView)
+        textLayout.addView(createdDateTextView)
+        textLayout.addView(dueDateTextView)
 
         // Add text layout and button to horizontal layout
         horizontalLayout.addView(textLayout)
@@ -251,7 +341,6 @@ class SubjectDetailFragment : Fragment() {
             val newFragment = ActivityDetailFragment()
             val bundle = Bundle().apply {
                 putString("activityName", activityName)
-                putString("teacherName", teacherName)
                 putString("activityDesc", activityDesc)
                 putString("subjectName", subjectName)
                 putString("code", code)
@@ -279,10 +368,16 @@ class SubjectDetailFragment : Fragment() {
         bottomSheetMoreView.findViewById<Button>(R.id.btnEditAct).setOnClickListener {
             val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_create_activity, null)
             val btnUploadFile: Button = dialogView.findViewById(R.id.btnUploadFile)
+            fileNameTextView = dialogView.findViewById(R.id.tvFileName)
+            btnSetDueDate = dialogView.findViewById(R.id.btnSetDueDate)
 
             btnUploadFile.setOnClickListener {
                 filePickerLauncher.launch("*/*") // Show all files initially, filter during selection
             }
+            btnSetDueDate.setOnClickListener {
+                showDatePicker()
+            }
+
             // Create the "Create Activity" dialog
             val editActivityDialog = AlertDialog.Builder(requireContext())
                 .setView(dialogView)
@@ -310,16 +405,41 @@ class SubjectDetailFragment : Fragment() {
                         val activityName = document.getString("activityName") ?: ""
                         val activityDesc = document.getString("activityDesc") ?: ""
                         val fileName = document.getString("fileName") ?: "No File Selected"
+                        // Retrieve fileUri as a string and convert it to Uri
+                        val fileUriString = document.getString("fileUri") ?: ""
+                        fileUri = if (fileUriString.isNotEmpty()) Uri.parse(fileUriString) else null
+                        val dueDate = document.getString("dueDate") ?: "Set Due Date"
+                        val points = document.getString("points")
 
                         // Set the values in the EditTexts
                         val etActivityName = dialogView.findViewById<EditText>(R.id.etActivityName)
                         val etDescription = dialogView.findViewById<EditText>(R.id.etDescription)
                         fileNameTextView = dialogView.findViewById(R.id.tvFileName)
+                        btnSetDueDate = dialogView.findViewById(R.id.btnSetDueDate)
+                        val etPoints = dialogView.findViewById<EditText>(R.id.etSetPoints)
+
 
                         etActivityName.setText(activityName)
                         etDescription.setText(activityDesc)
                         fileNameTextView.text = fileName
+                        btnSetDueDate.text = dueDate
+                        etPoints.setText(points)
 
+
+                        // Ensure that mimeType is retrieved based on fileUri
+                        var mimeType: String? = null
+                        if (fileUri != null) {
+                            mimeType = requireContext().contentResolver.getType(fileUri!!) // Get the mimeType from the fileUri
+                        }
+
+                        // Set onClickListener for the TextView to open the file
+                        fileNameTextView.setOnClickListener {
+                            if (fileUri != null && mimeType != null) {
+                                openFile(fileUri!!, mimeType) // Open the file if valid
+                            } else {
+                                fileNameTextView.isClickable = false // Disable click if no valid fileUri or mimeType
+                            }
+                        }
 
                         submitButton.setOnClickListener {
                             showLoading()
@@ -327,6 +447,8 @@ class SubjectDetailFragment : Fragment() {
                             val updatedActivityName = etActivityName.text.toString()
                             val updatedActivityDesc = etDescription.text.toString()
                             val updatedFileName = fileNameTextView.text.toString()
+                            val updatedDueDate = btnSetDueDate.text.toString()
+                            val updatedPoints = etPoints.text.toString()
 
                             // Update Firestorm document
                             editActivitiesCollection.document(documentId)
@@ -335,7 +457,9 @@ class SubjectDetailFragment : Fragment() {
                                         "activityName" to updatedActivityName,
                                         "activityDesc" to updatedActivityDesc,
                                         "fileName" to updatedFileName,
-                                        "fileUri" to fileUri.toString(),
+                                        "fileUri" to fileUri,
+                                        "dueDate" to updatedDueDate,
+                                        "points" to updatedPoints
                                     )
                                 )
                                 .addOnSuccessListener {
@@ -485,6 +609,15 @@ class SubjectDetailFragment : Fragment() {
         dialogView.findViewById<Button>(R.id.btnSubmitCreatedActivity).setOnClickListener {
             val activityName = dialogView.findViewById<EditText>(R.id.etActivityName).text.toString()
             val activityDesc = dialogView.findViewById<EditText>(R.id.etDescription).text.toString()
+            val points = dialogView.findViewById<EditText>(R.id.etSetPoints).text.toString()
+            val createdDate = Timestamp.now()
+            val date = createdDate.toDate()    // Convert to Date
+            // Format the Date to 12-hour time format with AM/PM
+            val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+            val formattedTime = timeFormat.format(date)
+
+            val dueDate = dueDate
+            val formattedDueDate = formatDueDate(dueDate)
             val code = arguments?.getString("code") ?: "N/A"
 
             // Validate inputs
@@ -518,10 +651,6 @@ class SubjectDetailFragment : Fragment() {
                                 return@addOnSuccessListener
                             }
 
-                            // Retrieve createdByUserName from the class document
-                            val classDocument = classDocuments.first()
-                            val createdByUserName = classDocument.getString("createdByUserName") ?: "Unknown"
-
                             // Prepare activity information
                             val activityInfo = hashMapOf(
                                 "activityId" to nextActivityId.toString(),
@@ -530,16 +659,18 @@ class SubjectDetailFragment : Fragment() {
                                 "createdByUserId" to auth.currentUser?.uid,
                                 "createdByUserName" to auth.currentUser?.displayName,
                                 "code" to code,
-                                "createdDate" to Timestamp.now(),
+                                "createdDate" to createdDate,
                                 "fileUri" to fileUri.toString(),
-                                "fileName" to fileUri?.let { it1 -> getFileNameFromUri(it1) }
+                                "fileName" to fileUri?.let { it1 -> getFileNameFromUri(it1) },
+                                "dueDate" to dueDate,
+                                "points" to points
                             )
 
                             // Add activity to Firestore
                             firestore.collection("Activities").add(activityInfo)
                                 .addOnSuccessListener {
                                     // After saving, create a new CardView with activityName and createdByUserName
-                                    val newCardView = createCardView(activityName, createdByUserName, activityDesc, nextActivityId.toString())
+                                    val newCardView = createCardView(activityName, formattedTime, formattedDueDate, activityDesc, nextActivityId.toString())
                                     cardContainer.addView(newCardView, 0)
 
                                     Toast.makeText(requireContext(), "Activity Created Successfully", Toast.LENGTH_SHORT).show()
@@ -594,11 +725,18 @@ class SubjectDetailFragment : Fragment() {
         val timePickerDialog = TimePickerDialog(
             requireContext(),
             { _, selectedHour, selectedMinute ->
+                // Format the time in 12-hour format with AM/PM
+                val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+                calendar.set(Calendar.HOUR_OF_DAY, selectedHour)
+                calendar.set(Calendar.MINUTE, selectedMinute)
+
+                // Get the formatted time string in 12-hour format
+                val formattedTime = timeFormat.format(calendar.time)
                 // After selecting the time, display the selected date & time in the TextView
-                val dueDate = "${day}/${month + 1}/$year $selectedHour:$selectedMinute"
+                dueDate = "${month + 1}/${day}/$year $formattedTime"
                 btnSetDueDate.text = dueDate // Update TextView with selected date & time
             },
-            hour, minute, true // true for 24-hour format, false for 12-hour format
+            hour, minute, false // true for 24-hour format, false for 12-hour format
         )
         timePickerDialog.show()
     }
@@ -618,8 +756,10 @@ class SubjectDetailFragment : Fragment() {
                     }
                     Toast.makeText(requireContext(), fileName, Toast.LENGTH_SHORT).show()
                 } else {
-                    fileUri =  null // Reset the fileUri to null
-                    Toast.makeText(requireContext(), "PDF or DOCX type only! $fileUri", Toast.LENGTH_SHORT).show()
+                    fileUri = null
+                    fileNameTextView.isClickable = false
+                    fileNameTextView.text = "No file selected"
+                    Toast.makeText(requireContext(), "PDF or DOCX type only!", Toast.LENGTH_SHORT).show()
                 }
             }
         }

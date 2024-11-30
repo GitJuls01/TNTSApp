@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -86,7 +87,8 @@ class Home : Fragment() {
         val subjectName: String,
         val section: String,
         val code: String,
-        val joinedDate: Date
+        val createdByUserName: String,
+        val joinedDate: Date,
     )
 
     private fun showLoading() {
@@ -110,6 +112,7 @@ class Home : Fragment() {
                 for (document in documents) {
                     val subjectName = document.getString("subjectName") ?: "N/A"
                     val section = document.getString("section") ?: "N/A"
+                    val createdByUserName = document.getString("createdByUserName") ?: "N/A"
                     val code = document.getString("code") ?: "N/A"
                     val members = document.get("members") as? List<Map<String, Any>>
                     if (members != null) {
@@ -117,7 +120,7 @@ class Home : Fragment() {
                         if (userEntry != null) {
                             val joinedDate = (userEntry["joinedDate"] as? Timestamp)?.toDate()
                             if (joinedDate != null) {
-                                classList.add(ClassInfo(subjectName, section, code, joinedDate))
+                                classList.add(ClassInfo(subjectName, section, code, createdByUserName, joinedDate))
                             }
                         }
                     } else {
@@ -133,7 +136,7 @@ class Home : Fragment() {
 
                 // Display the sorted classes
                 for (classInfo in classList) {
-                    val cardView = createCardView(classInfo.subjectName, classInfo.section, classInfo.code)
+                    val cardView = createCardView(classInfo.subjectName, classInfo.section, classInfo.createdByUserName, classInfo.code)
                     cardContainer.addView(cardView)
                 }
                 // Hide the loading indicator after successful data fetch
@@ -146,7 +149,7 @@ class Home : Fragment() {
             }
     }
 
-    private fun createCardView(subjectName: String, section: String, code: String): CardView {
+    private fun createCardView(subjectName: String, section: String, createdByUserName: String, code: String): CardView {
         val cardView = CardView(requireContext())
         cardView.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -186,21 +189,35 @@ class Home : Fragment() {
         // Subject Name TextView
         val subjectNameTextView = TextView(requireContext()).apply {
             text = subjectName
-            textSize = 14f
+            textSize = 15f
             setTextColor(Color.BLACK)
+            setTypeface(null, Typeface.BOLD)
         }
         // Section TextView
         val sectionTextView = TextView(requireContext()).apply {
             text = section
             textSize = 12f
             setTextColor(Color.DKGRAY)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 10 // Set the top margin in pixels (you can convert dp to pixels if needed)
+            }
         }
-        // Code TextView
-        val codeTextView = TextView(requireContext()).apply {
-            text = getString(R.string.class_code_label, code)  // Use string resource with placeholder
+
+        val teacherTextView = TextView(requireContext()).apply {
+            text = getString(R.string.teacher_name_label, createdByUserName)  // Use string resource with placeholder
             textSize = 12f
             setTextColor(Color.DKGRAY)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 30 // Set the top margin in pixels (you can convert dp to pixels if needed)
+            }
         }
+
         val button = Button(requireContext()).apply {
             setCompoundDrawablesWithIntrinsicBounds(R.drawable.baseline_more_vert_24, 0, 0, 0)
             background = null
@@ -214,7 +231,7 @@ class Home : Fragment() {
         // Add TextViews to the text layout
         textLayout.addView(subjectNameTextView)
         textLayout.addView(sectionTextView)
-        textLayout.addView(codeTextView)
+        textLayout.addView(teacherTextView)
 
         // Add text layout and button to horizontal layout
         horizontalLayout.addView(textLayout)
@@ -484,6 +501,7 @@ class Home : Fragment() {
             dialogView.findViewById<Button>(R.id.btnSubmitClass).setOnClickListener {
                 val subjectName = dialogView.findViewById<EditText>(R.id.etSubjectName).text.toString()
                 val section = dialogView.findViewById<EditText>(R.id.etSection).text.toString()
+                val createdByUserName = auth.currentUser?.displayName.toString()
 
                 // Validate inputs
                 if (subjectName.isBlank() || section.isEmpty()) {
@@ -503,7 +521,7 @@ class Home : Fragment() {
                     "section" to section,
                     "code" to randomCode, // Save the generated code
                     "createdByUserId" to auth.currentUser?.uid, // Save the userId of the creator
-                    "createdByUserName" to auth.currentUser?.displayName,
+                    "createdByUserName" to createdByUserName,
                     "members" to arrayListOf(
                         hashMapOf(
                             "userId" to (auth.currentUser?.uid ?: ""),
@@ -518,7 +536,7 @@ class Home : Fragment() {
                 firestore.collection("Classes").add(classInfo)
                     .addOnSuccessListener {
                         // After successfully saving, create a new CardView and display it
-                        val newCardView = createCardView(subjectName, section, randomCode)
+                        val newCardView = createCardView(subjectName, section, createdByUserName, randomCode)
                         cardContainer.addView(newCardView, 0)
 
                         Toast.makeText(requireContext(), "Class created Successfully", Toast.LENGTH_SHORT).show()
@@ -630,10 +648,11 @@ class Home : Fragment() {
                                         // Retrieve class details to display in a CardView
                                         val subjectName = document.getString("subjectName") ?: "Unknown"
                                         val section = document.getString("section") ?: "Unknown"
+                                        val createdByUserName = document.getString("createdByUserName") ?: "N/A"
                                         val code = document.getString("code") ?: "Unknown"
 
                                         // Call function to create and display a new CardView
-                                        val newCardView = createCardView(subjectName, section, code)
+                                        val newCardView = createCardView(subjectName, section, createdByUserName, code)
                                         cardContainer.addView(newCardView, 0)
 
                                         Toast.makeText(requireContext(), "Joined Class Successfully", Toast.LENGTH_SHORT).show()
