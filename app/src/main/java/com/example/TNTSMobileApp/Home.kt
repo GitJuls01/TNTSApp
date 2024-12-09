@@ -7,6 +7,8 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import androidx.fragment.app.Fragment
@@ -24,15 +26,20 @@ import android.widget.Toast
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.facebook.shimmer.ShimmerFrameLayout
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Date
 import kotlin.random.Random
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 class Home : Fragment() {
@@ -43,6 +50,12 @@ class Home : Fragment() {
     private lateinit var firestore: FirebaseFirestore // Initialize Firestore
     private lateinit var cardContainer: LinearLayout
     private lateinit var progressBar: ProgressBar
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var shimmerLayout: ShimmerFrameLayout
+    private lateinit var skeletonRecyclerView: RecyclerView
+    private lateinit var viewModel: HomeViewModel
+    private var lastObservedClassList: List<ClassAdapter.ClassInfo> = emptyList()
+    private var isFragmentInitialized = false
 
 
     override fun onCreateView(
@@ -58,20 +71,22 @@ class Home : Fragment() {
 
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
-        // Initialize the button and profile picture views
         circleButton = view.findViewById(R.id.circleButton)
         profilePicture = view.findViewById(R.id.profilePicture)
-        cardContainer = view.findViewById(R.id.cardContainer) // Initialize cardContainer
-        // Find the ProgressBar
+        //cardContainer = view.findViewById(R.id.cardContainer)
         progressBar = view.findViewById(R.id.progressBar)
-
-
-
-        // Find the FloatingActionButton from the inflated view
         val fab: View = view.findViewById(R.id.fab)
 
-        // Find the ProgressBar
-
+        shimmerLayout =view.findViewById(R.id.shimmerLayout)
+        skeletonRecyclerView = view.findViewById(R.id.skeletonRecyclerView)
+        recyclerView = view.findViewById(R.id.cardContainerRecyclerView)
+        recyclerView.layoutManager = LinearLayoutManager(requireContext()) // For vertical scrolling
+        // Use activityViewModels to persist the ViewModel across fragment transactions
+        viewModel = ViewModelProvider(requireActivity())[HomeViewModel::class.java]
+        val currentUser = auth.currentUser?.uid ?: return
+        // Configure the RecyclerView
+        skeletonRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        skeletonRecyclerView.adapter = SkeletonAdapter(10) // Show 10 skeleton items
         // Set an OnClickListener for the FloatingActionButton
         fab.setOnClickListener {
             showBottomSheetDialog()
@@ -79,17 +94,73 @@ class Home : Fragment() {
 
         // Display user's profile information in the button
         displayUserProfile()
-        fetchData()
+        //fetchData()
+        observeViewModel()
+
+        // Fetch data if not already loaded
+        if (viewModel.classList.value == null) {
+            showSkeletonLoading()
+            viewModel.fetchData(currentUser)
+        }
     }
 
-    // Define a data class for better structure
-    data class ClassInfo(
-        val subjectName: String,
-        val section: String,
-        val code: String,
-        val createdByUserName: String,
-        val joinedDate: Date,
-    )
+    private fun observeViewModel() {
+        viewModel.classList.observe(viewLifecycleOwner) { classList ->
+            if (classList.isNotEmpty()) {
+                // Check if this is the first time the fragment is being loaded
+                if (!isFragmentInitialized) {
+                    // Initial load: No delay, just update the RecyclerView immediately
+                    val adapter = ClassAdapter(classList.toMutableList(), { code ->
+                        showBottomSheetMoreDialog(code)
+                    }, viewModel) // Pass the HomeViewModel to the adapter
+                    recyclerView.adapter = adapter
+                    hideSkeletonLoading()
+                    isFragmentInitialized = true // Mark the fragment as initialized
+                } else {
+                    // If the class list has changed, add a delay
+                    if (classList != lastObservedClassList) {
+                        // If the list has changed, apply a delay
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            val adapter = ClassAdapter(classList.toMutableList(), { code ->
+                                showBottomSheetMoreDialog(code)
+                            }, viewModel)
+
+                            recyclerView.adapter = adapter
+                            hideSkeletonLoading()
+                        }, 1000) // 1 second delay
+                    } else {
+                        // If the list hasn't changed, just update the adapter without delay
+                        val adapter = ClassAdapter(classList.toMutableList(), { code ->
+                            showBottomSheetMoreDialog(code)
+                        }, viewModel)
+                        recyclerView.adapter = adapter
+                        hideSkeletonLoading()
+                    }
+                }
+
+                // Update the last observed class list
+                lastObservedClassList = classList
+            } else {
+                // Handle empty state if needed
+                hideSkeletonLoading()
+                Toast.makeText(requireContext(), "No classes found.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+
+
+    private fun showSkeletonLoading() {
+        shimmerLayout.visibility = View.VISIBLE
+        shimmerLayout.startShimmer()
+        recyclerView.visibility = View.GONE
+    }
+
+    private fun hideSkeletonLoading() {
+        shimmerLayout.visibility = View.GONE
+        shimmerLayout.stopShimmer()
+        recyclerView.visibility = View.VISIBLE
+    }
 
     private fun showLoading() {
         progressBar.visibility = View.VISIBLE
@@ -97,18 +168,27 @@ class Home : Fragment() {
 
     private fun hideLoading() {
         progressBar.visibility = View.GONE
+
     }
 
+    // Define a data class for better structure
+    data class ClassInfo(
+        val subjectName: String,
+        val section: String,
+        val createdByUserName: String,
+        val code: String,
+        val joinedDate: Date
+    )
+
     private fun fetchData() {
-        showLoading()
+        showSkeletonLoading()
         val currentUser = auth.currentUser?.uid ?: return
 
         // Initial query to retrieve documents
         firestore.collection("Classes")
             .get()
             .addOnSuccessListener { documents ->
-
-                val classList = mutableListOf<ClassInfo>()
+                val classList = mutableListOf<ClassAdapter.ClassInfo>()
                 for (document in documents) {
                     val subjectName = document.getString("subjectName") ?: "N/A"
                     val section = document.getString("section") ?: "N/A"
@@ -120,7 +200,7 @@ class Home : Fragment() {
                         if (userEntry != null) {
                             val joinedDate = (userEntry["joinedDate"] as? Timestamp)?.toDate()
                             if (joinedDate != null) {
-                                classList.add(ClassInfo(subjectName, section, code, createdByUserName, joinedDate))
+                                classList.add(ClassAdapter.ClassInfo(subjectName, section, createdByUserName, code, joinedDate))
                             }
                         }
                     } else {
@@ -131,16 +211,23 @@ class Home : Fragment() {
                 // Sort classes by joinedDate in descending order
                 classList.sortByDescending { it.joinedDate }
 
-                // Clear previous views to prevent duplication
-                cardContainer.removeAllViews()
-
-                // Display the sorted classes
-                for (classInfo in classList) {
-                    val cardView = createCardView(classInfo.subjectName, classInfo.section, classInfo.createdByUserName, classInfo.code)
-                    cardContainer.addView(cardView)
-                }
+                // Update RecyclerView with fetched data
+                // Set adapter with the classList and handle item click
+//                val adapter = ClassAdapter(classList) { code ->
+//                    // Call showBottomSheetMoreDialog with the class code
+//                    showBottomSheetMoreDialog(code)
+//                }
+                //recyclerView.adapter = adapter
+//                // Clear previous views to prevent duplication
+//                cardContainer.removeAllViews()
+//
+//                // Display the sorted classes
+//                for (classInfo in classList) {
+//                    val cardView = createCardView(classInfo.subjectName, classInfo.section, classInfo.createdByUserName, classInfo.code)
+//                    cardContainer.addView(cardView)
+//                }
                 // Hide the loading indicator after successful data fetch
-                hideLoading()
+                hideSkeletonLoading()
             }
             .addOnFailureListener { e ->
                 Log.e("FirestormError", "Error fetching documents: ", e)
@@ -334,6 +421,7 @@ class Home : Fragment() {
                     .setMessage("Are you sure you want to leave the class?")
                     .setPositiveButton("Yes") { _, _ ->
                         // If the user confirms, proceed with leaving the class
+                        showLoading()
                         firestore.collection("Classes")
                             .whereEqualTo(
                                 "code",
@@ -358,45 +446,33 @@ class Home : Fragment() {
                                                     "leaveDate",
                                                     Timestamp.now()
                                                 ) // Set leaveDate to the current server timestamp
-                                                fetchData()  // Assuming fetchData() updates the UI or other data
+
+                                                //fetchData()  // Assuming fetchData() updates the UI or other data
                                             }
                                         } else {
                                             member
                                         }
                                     }
 
-                                    // Update the members field in the Firestore document
+                                    // Update the members field in the Firestorm document
                                     firestore.collection("Classes").document(classId)
                                         .update("members", updatedMembers)
                                         .addOnSuccessListener {
-                                            Toast.makeText(
-                                                requireContext(),
-                                                "You left the Class",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            // Remove the class from the RecyclerView
+                                            (recyclerView.adapter as? ClassAdapter)?.removeClassByCode(code)
+                                            Toast.makeText(requireContext(), "You left the Class", Toast.LENGTH_SHORT).show()
+                                            hideLoading()
                                         }
-                                        .addOnFailureListener { e ->
-                                            Toast.makeText(
-                                                requireContext(),
-                                                "Failed to Leave Class: ${e.message}",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
+
+                                        .addOnFailureListener {
+                                            e -> Toast.makeText(requireContext(), "Failed to Leave Class: ${e.message}", Toast.LENGTH_SHORT).show() }
                                 } else {
                                     // If no matching class code is found
-                                    Toast.makeText(
-                                        requireContext(),
-                                        "Class Code does not match.",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    Toast.makeText(requireContext(), "Class Code does not match.", Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .addOnFailureListener { e ->
-                                Toast.makeText(
-                                    requireContext(),
-                                    "Error checking class code: ${e.message}",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                Toast.makeText(requireContext(), "Error checking class code: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
                     }
                     .setNegativeButton("No") { dialog, _ ->
@@ -428,8 +504,7 @@ class Home : Fragment() {
                                     if (leaveDate == "") { // Filter members with an empty leaveDate
                                         val userName = member["userName"] as? String ?: "Unknown"
                                         val profilePictureUrl = member["profilePictureUrl"] as? String ?: ""
-                                        membersList.add(
-                                            MembersAdapter.Member(userName, profilePictureUrl)
+                                        membersList.add(MembersAdapter.Member(userName, profilePictureUrl)
                                         )
                                     }
                                 }
@@ -471,7 +546,6 @@ class Home : Fragment() {
         // Create and show the BottomSheetDialog
         val bottomSheetDialog = BottomSheetDialog(requireContext())
         val bottomSheetView = layoutInflater.inflate(R.layout.bottom_sheet_layout, null)
-
 
         // Handle button clicks inside the BottomSheetDialog
         bottomSheetView.findViewById<Button>(R.id.btnCreateClass).setOnClickListener {
@@ -535,9 +609,22 @@ class Home : Fragment() {
 
                 firestore.collection("Classes").add(classInfo)
                     .addOnSuccessListener {
-                        // After successfully saving, create a new CardView and display it
-                        val newCardView = createCardView(subjectName, section, createdByUserName, randomCode)
-                        cardContainer.addView(newCardView, 0)
+
+                        // Create a new ClassInfo object
+                        val newClassInfo = ClassAdapter.ClassInfo(
+                            subjectName = subjectName,
+                            section = section,
+                            createdByUserName = createdByUserName,
+                            code = randomCode,
+                            joinedDate = Date() // Set the current date
+                        )
+
+                        // Add the new class to the RecyclerView adapter
+                        (recyclerView.adapter as? ClassAdapter)?.addClass(newClassInfo)
+                        //fetchData()
+//                        // After successfully saving, create a new CardView and display it
+//                        val newCardView = createCardView(subjectName, section, createdByUserName, randomCode)
+//                        cardContainer.addView(newCardView, 0)
 
                         Toast.makeText(requireContext(), "Class created Successfully", Toast.LENGTH_SHORT).show()
                         hideLoading()
@@ -555,7 +642,6 @@ class Home : Fragment() {
             // Show the "Create Class" dialog
             createClassDialog.show()
         }
-
         bottomSheetView.findViewById<Button>(R.id.btnJoinClass).setOnClickListener {
             // Handle Join Class button click
             bottomSheetDialog.dismiss()
@@ -611,7 +697,7 @@ class Home : Fragment() {
                             if (member != null) {
                                 // Check the leaveDate for the member
                                 val currentLeaveDate = member["leaveDate"]
-                                if (currentLeaveDate == null) {
+                                if (currentLeaveDate == "") {
                                     Toast.makeText(requireContext(), "You are already joined this class", Toast.LENGTH_SHORT).show()
                                 } else {
                                     // Update leaveDate to null (delete it) for the current member
@@ -619,7 +705,7 @@ class Home : Fragment() {
                                         if (m["userId"] == currentUserId) {
                                             m.toMutableMap().apply {
                                                 put("leaveDate", "") // Remove the leaveDate field
-                                                fetchData()
+                                                //fetchData()
                                             }
                                         } else {
                                             m
@@ -629,7 +715,23 @@ class Home : Fragment() {
                                         .document(classId)
                                         .update("members", updatedMembers)
                                         .addOnSuccessListener {
+                                            showLoading()
+                                            val subjectName = document.getString("subjectName") ?: "Unknown"
+                                            val section = document.getString("section") ?: "Unknown"
+                                            val createdByUserName = document.getString("createdByUserName") ?: "N/A"
+                                            val code = document.getString("code") ?: "Unknown"
+
+                                            // Update the existing class in RecyclerView
+                                            val updatedClass = ClassAdapter.ClassInfo(
+                                                subjectName = subjectName,
+                                                section = section,
+                                                createdByUserName = createdByUserName,
+                                                code = code,
+                                                joinedDate = joinedDate.toDate()
+                                            )
+                                            (recyclerView.adapter as? ClassAdapter)?.addClass(updatedClass)
                                             Toast.makeText(requireContext(), "Rejoin the Class Successfully", Toast.LENGTH_SHORT).show()
+                                            hideLoading()
                                         }
                                 }
                             }else {
@@ -651,9 +753,19 @@ class Home : Fragment() {
                                         val createdByUserName = document.getString("createdByUserName") ?: "N/A"
                                         val code = document.getString("code") ?: "Unknown"
 
-                                        // Call function to create and display a new CardView
-                                        val newCardView = createCardView(subjectName, section, createdByUserName, code)
-                                        cardContainer.addView(newCardView, 0)
+                                        //fetchData()
+//                                        // Call function to create and display a new CardView
+//                                        val newCardView = createCardView(subjectName, section, createdByUserName, code)
+//                                        cardContainer.addView(newCardView, 0)
+                                        // Add the new class to RecyclerView
+                                        val newClass = ClassAdapter.ClassInfo(
+                                            subjectName = subjectName,
+                                            section = section,
+                                            createdByUserName = createdByUserName,
+                                            code = code,
+                                            joinedDate = joinedDate.toDate()
+                                        )
+                                        (recyclerView.adapter as? ClassAdapter)?.addClass(newClass)
 
                                         Toast.makeText(requireContext(), "Joined Class Successfully", Toast.LENGTH_SHORT).show()
                                         hideLoading()

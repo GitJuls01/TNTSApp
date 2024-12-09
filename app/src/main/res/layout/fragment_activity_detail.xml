@@ -66,8 +66,9 @@
         android:id="@+id/btnBack"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:backgroundTint="@color/fui_transparent"
         android:src="@drawable/baseline_arrow_back_24"
-        android:background="@color/fui_transparent"
+        android:background="?attr/selectableItemBackgroundBorderless"
         android:layout_marginTop="40dp"
         app:layout_constraintStart_toStartOf="@id/guideline_vertical"
         app:layout_constraintTop_toTopOf="parent" />

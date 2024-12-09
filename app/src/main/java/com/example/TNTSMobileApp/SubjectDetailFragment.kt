@@ -25,7 +25,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.facebook.shimmer.ShimmerFrameLayout
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.firebase.Timestamp
@@ -34,6 +38,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 class SubjectDetailFragment : Fragment() {
@@ -43,23 +48,27 @@ class SubjectDetailFragment : Fragment() {
     private lateinit var profilePicture: ImageView
     private lateinit var subjectNameTextView: TextView
     private lateinit var firestore: FirebaseFirestore
-    private lateinit var cardContainer: LinearLayout
     private lateinit var fabActivity: FloatingActionButton
     private var fileUri: Uri? = null
     private lateinit var fileNameTextView: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var btnSetDueDate: Button
     private var dueDate: String ? = null
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var skeletonRecyclerView: RecyclerView
+    private lateinit var shimmerLayout: ShimmerFrameLayout
+    private lateinit var viewModel: SubjectDetailViewModel
+
+
 
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Inflate the layout for this fragment
         val view = inflater.inflate(R.layout.fragment_subject_detail, container, false)
-        progressBar = view.findViewById(R.id.progressBar)
 
+        progressBar = view.findViewById(R.id.progressBar)
         fabActivity = view.findViewById(R.id.fabActivity)
         fabActivity.setOnClickListener {
             createActivity()
@@ -70,6 +79,8 @@ class SubjectDetailFragment : Fragment() {
             val newFragment = Home()
             (activity as MainActivity).replaceFragment(newFragment)
         }
+        viewModel = ViewModelProvider(requireActivity())[SubjectDetailViewModel::class.java]
+
 
         return view
     }
@@ -82,16 +93,68 @@ class SubjectDetailFragment : Fragment() {
         profilePicture = view.findViewById(R.id.profilePicture)
         subjectNameTextView = view.findViewById(R.id.classSubjectNameText)
         firestore = FirebaseFirestore.getInstance()
-        cardContainer = view.findViewById(R.id.cardContainer)
 
+        shimmerLayout = view.findViewById(R.id.shimmerLayout)
+        skeletonRecyclerView = view.findViewById(R.id.skeletonRecyclerView)
+
+        skeletonRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        skeletonRecyclerView.adapter = SkeletonAdapter(10) // Show 10 skeleton items
+
+        recyclerView = view.findViewById(R.id.cardContainerRecyclerView)
+        recyclerView.layoutManager = LinearLayoutManager(requireContext()) // For vertical scrolling
+
+        val classCode = arguments?.getString("code") ?: "N/A"
+        val currentUser = auth.currentUser?.uid ?: return
+
+        // Trigger fetch only if needed
+        viewModel.fetchData(classCode, currentUser)
 
         // Retrieve data from arguments and set to TextView
         subjectNameTextView.text = arguments?.getString("subjectName") ?: "N/A"
 
         displayUserProfile()
         checkIfUserIsCreator()
-        fetchData()
-        showLoading()
+        observeViewModel()
+        //fetchData()
+    }
+
+    private fun observeViewModel() {
+        // Observe loading state
+        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            if (isLoading) {
+                showSkeletonLoading()
+            } else {
+                hideSkeletonLoading()
+            }
+        }
+
+        viewModel.activityList.observe(viewLifecycleOwner) { activityList ->
+            recyclerView.adapter = ActivityAdapter(
+                activityList = activityList.toMutableList(),
+                auth = FirebaseAuth.getInstance()
+            ) { code, activityId ->
+                showBottomSheetMoreDialog(code, activityId)
+            }
+        }
+
+    viewModel.status.observe(viewLifecycleOwner) { statusMessage ->
+            // Show the status message as a Toast
+            if (!statusMessage.isNullOrEmpty()) {
+                Toast.makeText(requireContext(), statusMessage, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun showSkeletonLoading() {
+        shimmerLayout.visibility = View.VISIBLE
+        shimmerLayout.startShimmer()
+        recyclerView.visibility = View.GONE
+    }
+
+    private fun hideSkeletonLoading() {
+        shimmerLayout.visibility = View.GONE
+        shimmerLayout.stopShimmer()
+        recyclerView.visibility = View.VISIBLE
     }
 
     private fun showLoading() {
@@ -104,11 +167,12 @@ class SubjectDetailFragment : Fragment() {
 
     private fun fetchData() {
 
+        showSkeletonLoading()
         val classCode = arguments?.getString("code") ?: "N/A"
         val currentUser = auth.currentUser?.uid ?: return
 
         // Clear the container before fetching new data
-        cardContainer.removeAllViews()
+        //cardContainer.removeAllViews()
         firestore.collection("Classes")
             .whereEqualTo("code", classCode)
             .get()
@@ -136,19 +200,40 @@ class SubjectDetailFragment : Fragment() {
                             return@addOnSuccessListener
                         }
 
+                        val activityList = mutableListOf<ActivityAdapter.ActivityInfo>()
                         for (activityDocument in activityDocuments) {
+                            val code =  activityDocument.getString("code") ?: "N/A"
                             val activityName = activityDocument.getString("activityName") ?: "N/A"
                             val activityDesc = activityDocument.getString("activityDesc") ?: "N/A"
                             val activityId = activityDocument.getString("activityId") ?: "N/A"
+                            val subjectName = arguments?.getString("subjectName") ?: "N/A"
                             val createdDate = activityDocument.getTimestamp("createdDate")
                             val formattedCreatedDate = formatCreatedDate(createdDate)
                             val dueDate = activityDocument.getString("dueDate")
                             val formattedDueDate = formatDueDate(dueDate)
 
-                            val cardView = createCardView(activityName, formattedCreatedDate, formattedDueDate, activityDesc, activityId)
-                            cardContainer.addView(cardView)
+                            activityList.add(ActivityAdapter.ActivityInfo(
+                                activityName,
+                                formattedCreatedDate,
+                                formattedDueDate,
+                                activityDesc,
+                                code,
+                                activityId,
+                                subjectName,
+                                classCreator))
+
+//                            val cardView = createCardView(activityName, formattedCreatedDate, formattedDueDate, activityDesc, activityId)
+//                            cardContainer.addView(cardView)
                         }
-                        hideLoading() // Hide loading after successfully adding activities
+                        hideSkeletonLoading()
+                        val adapter = ActivityAdapter(
+                            activityList = activityList,
+                            auth = FirebaseAuth.getInstance()
+                        ) { code, activityId ->
+                            showBottomSheetMoreDialog(code, activityId)
+                        }
+                        recyclerView.adapter = adapter
+
                     }
                     .addOnFailureListener { exception -> Toast.makeText(requireContext(), "Failed to load activities: ${exception.message}", Toast.LENGTH_SHORT).show() }
                 hideLoading()
@@ -160,40 +245,44 @@ class SubjectDetailFragment : Fragment() {
     private fun formatDueDate(dueDate: String?): String {
         return try {
             val dateFormat = SimpleDateFormat("MM/dd/yyyy h:mm a", Locale.getDefault()) // Adjust format as needed
-            val date = dateFormat.parse(dueDate ?: return "No Due Date")
-            val now = Calendar.getInstance()
-            val dueDateCalendar = Calendar.getInstance().apply {
-                if (date != null) {
-                    time = date
+            if (dueDate == "Set Due Date") {
+                "No Due Date"
                 }
-            }
-
-            val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault()) // 12-hour format with AM/PM
-
-            when {
-                // Check if the due date is today
-                now.get(Calendar.YEAR) == dueDateCalendar.get(Calendar.YEAR) &&
-                        now.get(Calendar.DAY_OF_YEAR) == dueDateCalendar.get(Calendar.DAY_OF_YEAR) -> {
-                    "Today, ${date?.let { timeFormat.format(it) }}"
-                }
-                // Check if the due date is tomorrow
-                now.get(Calendar.YEAR) == dueDateCalendar.get(Calendar.YEAR) &&
-                        now.get(Calendar.DAY_OF_YEAR) + 1 == dueDateCalendar.get(Calendar.DAY_OF_YEAR) -> {
-                    "Tomorrow, ${date?.let { timeFormat.format(it) }}"
-                }
-                // Show only the date for other days
-                else -> {
-                    val formattedDate = date?.let {
-                        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(
-                            it
-                        )
+            else {
+                val date = dateFormat.parse(dueDate ?: return "No Due Date")
+                val now = Calendar.getInstance()
+                val dueDateCalendar = Calendar.getInstance().apply {
+                    if (date != null) {
+                        time = date
                     }
-                    val formattedTime = date?.let { timeFormat.format(it) } // Format the time as per device settings
-                    "$formattedDate $formattedTime"
                 }
+                val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault()) // 12-hour format with AM/PM
 
+                when {
+                    // Check if the due date is today
+                    now.get(Calendar.YEAR) == dueDateCalendar.get(Calendar.YEAR) &&
+                            now.get(Calendar.DAY_OF_YEAR) == dueDateCalendar.get(Calendar.DAY_OF_YEAR) -> {
+                        "Today, ${date?.let { timeFormat.format(it) }}"
+                    }
+                    // Check if the due date is tomorrow
+                    now.get(Calendar.YEAR) == dueDateCalendar.get(Calendar.YEAR) &&
+                            now.get(Calendar.DAY_OF_YEAR) + 1 == dueDateCalendar.get(Calendar.DAY_OF_YEAR) -> {
+                        "Tomorrow, ${date?.let { timeFormat.format(it) }}"
+                    }
+                    // Show only the date for other days
+                    else -> {
+                        val formattedDate = date?.let {
+                            SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(
+                                it
+                            )
+                        }
+                        val formattedTime = date?.let { timeFormat.format(it) } // Format the time as per device settings
+                        "$formattedDate $formattedTime"
+                    }
+
+                }
             }
-        } catch (e: Exception) {
+            }catch (e: Exception) {
             "Fallback if parsing fails" // Fallback if parsing fails
         }
     }
@@ -464,7 +553,7 @@ class SubjectDetailFragment : Fragment() {
                                 )
                                 .addOnSuccessListener {
                                     Toast.makeText(requireContext(), "Activity Updated Successfully", Toast.LENGTH_SHORT).show()
-                                    fetchData()
+                                    //fetchData()
 
                                     editActivityDialog.dismiss() // Close the dialog
                                 }
@@ -498,8 +587,11 @@ class SubjectDetailFragment : Fragment() {
                                     // Delete the document
                                     activitiesCollection.document(document.id).delete()
                                         .addOnSuccessListener {
+                                            // Remove activity from adapter's list
+                                            val adapter = recyclerView.adapter as? ActivityAdapter
+                                            adapter?.removeActivity(activityId)
                                             Toast.makeText(requireContext(), "Activity Deleted Successfully", Toast.LENGTH_SHORT).show()
-                                            fetchData()
+                                            hideLoading()
                                             bottomSheetMoreDialog.dismiss() // Dismiss the bottom sheet dialog after successful deletion
                                         }
                                         .addOnFailureListener { e ->
@@ -611,11 +703,9 @@ class SubjectDetailFragment : Fragment() {
             val activityDesc = dialogView.findViewById<EditText>(R.id.etDescription).text.toString()
             val points = dialogView.findViewById<EditText>(R.id.etSetPoints).text.toString()
             val createdDate = Timestamp.now()
-            val date = createdDate.toDate()    // Convert to Date
-            // Format the Date to 12-hour time format with AM/PM
+            val date = Date()
             val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-            val formattedTime = timeFormat.format(date)
-
+            val formattedCreatedDate = timeFormat.format(date)
             val dueDate = dueDate
             val formattedDueDate = formatDueDate(dueDate)
             val code = arguments?.getString("code") ?: "N/A"
@@ -666,13 +756,22 @@ class SubjectDetailFragment : Fragment() {
                                 "points" to points
                             )
 
-                            // Add activity to Firestore
+                            // Add activity to Firestorm
                             firestore.collection("Activities").add(activityInfo)
                                 .addOnSuccessListener {
-                                    // After saving, create a new CardView with activityName and createdByUserName
-                                    val newCardView = createCardView(activityName, formattedTime, formattedDueDate, activityDesc, nextActivityId.toString())
-                                    cardContainer.addView(newCardView, 0)
+                                    val newActivityInfo = ActivityAdapter.ActivityInfo(
+                                        activityName = activityName,
+                                        formattedCreatedDate = formattedCreatedDate,
+                                        formattedDueDate = formattedDueDate,
+                                        activityDesc = activityDesc,
+                                        code = code,
+                                        activityId = nextActivityId.toString(),
+                                        subjectName = arguments?.getString("subjectName") ?: "N/A",
+                                        classCreator = auth.currentUser?.uid ?: "",
+                                    )
 
+                                    // Add the new class to the RecyclerView adapter
+                                    (recyclerView.adapter as? ActivityAdapter)?.addClass(newActivityInfo)
                                     Toast.makeText(requireContext(), "Activity Created Successfully", Toast.LENGTH_SHORT).show()
                                     hideLoading()
                                     // Clear input fields
@@ -772,7 +871,7 @@ class SubjectDetailFragment : Fragment() {
     }
 
     private fun getFileNameFromUri(uri: Uri): String {
-        var fileName = "Unknown"
+        var fileName = "No file selected"
         requireContext().contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (nameIndex != -1) {

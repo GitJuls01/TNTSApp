@@ -42,7 +42,9 @@ class MembersAdapter(private val members: List<Member>) : RecyclerView.Adapter<M
 
     override fun getItemCount(): Int = members.size
 
-    data class Member(val name: String, val profilePictureUrl: String)
+    data class Member(
+        val name: String,
+        val profilePictureUrl: String)
 }
 
 

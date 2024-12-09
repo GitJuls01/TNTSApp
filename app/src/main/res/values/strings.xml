@@ -43,6 +43,10 @@
     <string name="delete_activity">Delete Activity</string>
     <string name="edit_activity">Edit Activity</string>
     <string name="set_points">Set Points</string>
+    <string name="set_due_date">Set Due Date</string>
+    <string name="more_button"></string>
+    <string name="due">Due:</string>
+    <string name="posted">Posted:</string>
 
 
 </resources>
